@@ -9,6 +9,7 @@ CREATE TABLE table_to_delete AS
   /*
    * space after creating table and before delete command: 575 mb
    * space after delete command: nothing changes, the same 575 mb
+   * space after vacuum full verbose command: 383 mb
    * space after truncate command: 0 
    * */ 
   SELECT *, pg_size_pretty(total_bytes) AS total,
