@@ -4,8 +4,8 @@
  * 
  */
 
-select * from film order by last_update desc limit 3;
-
+-- inserting data while selecting the language id from language. Alternatively I could make a cte table from which
+-- to insert to the film table while checking for the same title, but that turned out to be slower and verbose
 insert into film (title, description, release_year, language_id, original_language_id, rental_duration, rental_rate, length, replacement_cost, rating, special_features, fulltext)
 select 
     'The Message', 
@@ -76,6 +76,7 @@ returning *;
  * 
  * */
 
+-- using a CTE to insert to the actor table. This is to be prevent duplicate values before inserting
 with new_actors as (
     select * from (values 
         ('Anthony', 'Quinn'),
@@ -98,10 +99,11 @@ with new_actors as (
         ('David', 'O`Hara')
     ) as vals(first_name, last_name)
 )
+
 insert into actor (first_name, last_name)
 select first_name, last_name
 from new_actors
-where not exists (
+where not exists ( -- looking for the same actor first name and last name in the actor table
     select 1 from actor 
     where actor.first_name = new_actors.first_name 
       and actor.last_name = new_actors.last_name
@@ -110,16 +112,17 @@ returning *;
 
 
 
-
+-- adding the first film actors to film_actor. I tried using a subquery to get film id, but the `not exists` subquery could
+-- not excess the result of the other subquery
 insert into film_actor(actor_id, film_id)
 select 
 	a.actor_id, 
 	f.film_id 
 from actor a 
 join film f on f.title = 'Braveheart'
-where a.first_name in ('Mel', 'Sophie', 'Patrick', 'Angus', 'Brendan',  'David') and 
-	  a.last_name in ('Gibson', 'Marceau', 'McGoohan', 'Macfadyen', 'Gleeson', 'O`Hara')
-	  and not exists (
+where concat(a.first_name, ' ', a.last_name) 
+in ('Mel Gibson', 'Sophie Marceau', 'Patrick McGoohan', 'Angus Macfadyen', 'Brendan Gleeson', 'David O`Hara')
+	  and not exists ( -- making sure that the (actor_id, film_id) do not already exist in film_actor
 	      select 1 
 	      from film_actor fa 
 	      where fa.actor_id = a.actor_id 
@@ -127,49 +130,46 @@ where a.first_name in ('Mel', 'Sophie', 'Patrick', 'Angus', 'Brendan',  'David')
       )
 returning *;
 
-
-
+-- adding the second film actors to film_actor
 insert into film_actor(actor_id, film_id)
 select 
 	a.actor_id, 
 	f.film_id 
 from actor a 
 join film f on f.title like 'The P%'
-where a.first_name in ('Will', 'Jaden', 'Thandie', 'Brian', 'James',  'Dan') and 
-	  a.last_name in ('Smith', 'Smith', 'Newton', 'Howe', 'Karen', 'Castellaneta')
-	  and not exists (
-	      select 1 
-	      from film_actor fa 
-	      where fa.actor_id = a.actor_id 
-	        and fa.film_id = f.film_id
-      )
+where concat(a.first_name, ' ', a.last_name) 
+in ('Will Smith', 'Jaden Smith', 'Thandie Newton', 'Brian Howe', 'James Karen', 'Dan Castellaneta')
+  and not exists (
+      select 1 
+      from film_actor fa 
+      where fa.actor_id = a.actor_id 
+        and fa.film_id = f.film_id
+  )
 returning *;
 
-
-
+-- adding the third film actors to film_actor
 insert into film_actor(actor_id, film_id)
 select 
 	a.actor_id, 
 	f.film_id 
 from actor a 
 join film f on f.title like 'The M%'
-where a.first_name in ('Anthony', 'Irene', 'Michael', 'Johnny', 'Garrick',  'Damien') and 
-	  a.last_name in ('Quinn', 'Papadopoulos', 'Ansara', 'Sekka', 'Hagon', 'Thomas')
-	  and not exists (
-	      select 1 
-	      from film_actor fa 
-	      where fa.actor_id = a.actor_id 
-	        and fa.film_id = f.film_id
-      )
+where concat(a.first_name, ' ', a.last_name) 
+	in ('Anthony Quinn', 'Irene Papadopoulos', 'Michael Ansara', 'Johnny Sekka', 'Garrick Hagon', 'Damien Thomas')
+    and not exists (
+      select 1 
+      from film_actor fa 
+      where fa.actor_id = a.actor_id 
+        and fa.film_id = f.film_id
+ 	 )
 returning *;
 
 
 -- Add your favorite movies to any store's inventory.
-
 insert into inventory(film_id, store_id)
 select f.film_id, s.store_id 
 from film f
-join store s on s.store_id = (select store_id from store order by random() limit 1)
+join store s on s.store_id = (select store_id from store order by random() limit 1) -- store_id = random id
 where f.title in ('Braveheart', 'The Pursuit of Happyness', 'The Message') and not exists (
     select 1 
     from inventory i
@@ -205,18 +205,9 @@ returning *;
 /*
  * Remove any records related to you (as a customer) from all tables except 'Customer' and 'Inventory'
  * */
-
 delete from payment where customer_id = (select customer_id from customer where first_name = 'Begzod')
-and exists (
-    select 1 from payment p 
-    where p.customer_id = (select customer_id from customer where first_name = 'Begzod')
-);
 
 delete from rental where customer_id = (select customer_id from customer where first_name = 'Begzod')
-and exists (
-    select 1 from rental r 
-    where r.customer_id = (select customer_id from customer where first_name = 'Begzod')
-);
 
 
 /*
@@ -226,6 +217,8 @@ and exists (
 new partition (see the scripts to install the training database ) or add records for the
 first half of 2017)
  * */
+
+ -- inserting into rental followed by payment
 insert into rental (rental_date, inventory_id, customer_id, return_date, staff_id)
 	select '2017-05-15 14:30:00' as rental_date,
 			i.inventory_id,
@@ -282,7 +275,7 @@ insert into payment (customer_id, staff_id, rental_id, amount, payment_date)
 				select 1 from payment p2
 			    where p2.payment_date = rental.rental_date and p2.amount = 9.99
 			)
-	order by last_update desc 
+	order by last_update desc  --to access the last rental without having to give the exact date
 	limit 1
 returning *;
 
@@ -318,4 +311,3 @@ insert into payment (customer_id, staff_id, rental_id, amount, payment_date)
 	order by last_update desc 
 	limit 1
 	returning *;
-
